@@ -2,18 +2,18 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: jufieangsuduotgrquyvgjcxrptgejkzqgonsceg
+  name: rpcr-bhon-qoue-uflp
 spec:
   template:
     spec:
       containers:
-        - name: jufieangsuduotgrquyvgjcxrptgejkzqgonsceg
+        - name: rpcr-bhon-qoue-uflp
           image: ubuntu
-          command: ["echo", "Hello, world"]
-          workingDir: /home
+          command: ["bash", "-c", "echo \"Hello\"; exit 1"]
+          workingDir: /work
           volumeMounts:
             - name: cwd
-              mountPath: /home
+              mountPath: /work
       restartPolicy: Never
       securityContext:
         runAsUser: 505

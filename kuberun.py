@@ -10,6 +10,7 @@ import string
 import subprocess
 import sys
 import time
+import collections
 from subprocess import CalledProcessError
 
 KUBECTL = 'kubectl'
@@ -17,6 +18,7 @@ FILENAME = 'ipcexe.yml'
 # 24 hours
 MAXTIME = 86400
 RETRY = 2
+JOB_STATUSES = ('waiting', 'running', 'terminated')
 TEMPLATE = '''---
 apiVersion: batch/v1
 kind: Job
@@ -43,6 +45,9 @@ spec:
             path: {4}
   backoffLimit: 0
 '''
+
+JobStatus = collections.namedtuple(
+    'JobStatus', 'state exit_code started_at finished_at reason message')
 
 
 def check_programs(programs):
@@ -103,7 +108,7 @@ def schedule_job(jobfile=FILENAME):
     try:
         pod_name = subprocess.check_output('{0} apply -f {1}'.format(
             KUBECTL, jobfile),
-            shell=True)
+                                           shell=True)
         pod_name = pod_name.decode('utf-8')
         pod_name = pod_name.replace(' created', '')
         pod_name = pod_name.strip()
@@ -112,28 +117,40 @@ def schedule_job(jobfile=FILENAME):
         raise
 
 
-def check_job(job_name):
-    """Get exit code for job
-    """
+def get_job_state(job_name):
+    get_pod = '{0} get pods --selector=job-name={1} --output=json'.format(
+        KUBECTL, job_name)
+
+    json_resp = subprocess.check_output(get_pod, shell=True)
+    job_state = {}
     try:
-        get_pods = '{0} get pods --selector=job-name={1} '.format(
-            KUBECTL, job_name)
-        get_pods = get_pods + \
-            "--output=jsonpath='{.items[0].status.containerStatuses[0].state.*.exitCode}'"
-        exit_code = subprocess.check_output(get_pods, shell=True)
-        # TODO - wrap in case Unicode decode fails
-        exit_code = exit_code.decode('utf-8')
-        if exit_code == '':
-            return None
-        else:
-            return exit_code
-    except CalledProcessError:
+        job_state = json.loads(json_resp.decode('utf-8'))
+    except Exception:
         raise
 
+    state_obj = job_state.get('items',
+                              [])[0].get('status',
+                                         {}).get('containerStatuses',
+                                                 [])[0].get('state', {})
 
-def parse_job_state(pod_json):
-    (exitCode, message, reason, stderr) = (None, None, None, None)
-    return (exitCode, message, reason, stderr)
+    state_name = list(state_obj.keys())[0]
+    if state_name not in JOB_STATUSES:
+        raise ValueError('Unknown state encountered: {0}'.format(state_name))
+
+    state_record = state_obj[state_name]
+    response = [state_name]
+    for k in ('exitCode', 'startedAt', 'finishedAt', 'reason', 'message'):
+        response.append(state_record.get(k, None))
+
+    decoded_response = []
+    for r in response:
+        try:
+            val = r.decode('utf-8')
+        except Exception:
+            val = r
+        decoded_response.append(val)
+    response = JobStatus(*decoded_response)
+    return response
 
 
 def get_pod_logs(pod_name, tail=None):
@@ -178,15 +195,18 @@ def monitor_job(job_name, timeout):
     start_time = seconds()
     elapsed_time = 0
     exit_code = None
+    job_state = None
     while exit_code is None and elapsed_time < timeout:
-        exit_code = check_job(job_name)
+        get_job_state(job_name)
+        job_state = get_job_state(job_name)
+        exit_code = job_state.exit_code
         logging.debug('Check status in {0}s [{1}s]'.format(
             RETRY, elapsed_time))
         time.sleep(RETRY)
         elapsed_time = seconds() - start_time
     if exit_code is not None:
         logging.debug('Done'.format(RETRY))
-        return int(exit_code)
+        return job_state
     else:
         raise SystemError('Runtime exceeded (limit: {}s)'.format(timeout))
 
@@ -216,8 +236,12 @@ def main(args, unknownargs):
         logging.info('Launched {0}'.format(pod_name))
 
         # Monitor job
-        exit_code = monitor_job(job_name, args.timeout)
-        logging.debug('Exit code: {0}'.format(exit_code))
+        job_state = monitor_job(job_name, args.timeout)
+        logging.debug('Started: {0}'.format(job_state.started_at))
+        logging.debug('Finished: {0}'.format(job_state.finished_at))
+        logging.debug('Message: {0}'.format(job_state.message))
+        logging.debug('Reason: {0}'.format(job_state.reason))
+        logging.debug('Exit code: {0}'.format(job_state.exit_code))
 
         logging.debug('Getting job logs')
         print(get_pod_logs(pod_name, tail=args.tail))
@@ -228,7 +252,7 @@ def main(args, unknownargs):
             delete_job(job_name)
 
         # Propagate exit code
-        sys.exit(exit_code)
+        sys.exit(job_state.exit_code)
 
     except Exception as e:
         logging.exception(e)
@@ -243,11 +267,14 @@ if __name__ == '__main__':
                         metavar='image[:tag]',
                         default='ubuntu:cosmic',
                         help='Container repo')
-    parser.add_argument('--x-job', dest='job',
+    parser.add_argument('--x-job',
+                        dest='job',
                         metavar='<job-name>',
                         help='Job name (must be distinct)')
-    parser.add_argument('--x-filename', dest='filename',
-                        metavar='<filename.yml>', help='Job filename')
+    parser.add_argument('--x-filename',
+                        dest='filename',
+                        metavar='<filename.yml>',
+                        help='Job filename')
     parser.add_argument('--x-timeout',
                         dest='timeout',
                         metavar='<seconds>',
