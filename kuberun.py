@@ -108,7 +108,7 @@ def schedule_job(jobfile=FILENAME):
     try:
         pod_name = subprocess.check_output('{0} apply -f {1}'.format(
             KUBECTL, jobfile),
-                                           shell=True)
+            shell=True)
         pod_name = pod_name.decode('utf-8')
         pod_name = pod_name.replace(' created', '')
         pod_name = pod_name.strip()
@@ -200,8 +200,8 @@ def monitor_job(job_name, timeout):
         get_job_state(job_name)
         job_state = get_job_state(job_name)
         exit_code = job_state.exit_code
-        logging.debug('Check status in {0}s [{1}s]'.format(
-            RETRY, elapsed_time))
+        logging.debug('Check {0} status in {1}s [{2}s]'.format(
+            job_name, RETRY, elapsed_time))
         time.sleep(RETRY)
         elapsed_time = seconds() - start_time
     if exit_code is not None:
