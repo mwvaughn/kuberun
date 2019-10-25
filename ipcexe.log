@@ -1,0 +1,9 @@
+INFO:root:Launched job.batch/jufieangsuduotgrquyvgjcxrptgejkzqgonsceg
+DEBUG:root:Check status in 2s [0s]
+DEBUG:root:Check status in 2s [2s]
+DEBUG:root:Check status in 2s [4s]
+DEBUG:root:Done
+DEBUG:root:Exit code: 0
+DEBUG:root:Getting job logs
+DEBUG:root:Cleaning up
+Hello, world

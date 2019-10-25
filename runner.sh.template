@@ -1,0 +1,30 @@
+
+die() {
+    mesg "ERROR" $@
+    exit 1
+}
+
+mesg() {
+    lvl=$1
+    shift
+    message=$@
+    echo "[$lvl] $(utc_date) - $message"
+}
+
+utc_date() {
+    echo $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+}
+
+# Avoid keeping the config around
+echo "ipcexe.yml" >> .agave.archive
+
+# Assuming kuberun is in $PATH
+kuberun.py --x-image ${CONTAINER_IMAGE} --x-job ${JOB_ID} \
+    echo 'Hello, world' >ipcexe.log 2>&1
+
+# container_exec now returns the exit code from our container
+STAT="$?"
+if [ "$STAT" != 0 ]; then
+    die "Local error detected in job execution"
+fi
+

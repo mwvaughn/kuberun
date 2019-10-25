@@ -1,0 +1,25 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jufieangsuduotgrquyvgjcxrptgejkzqgonsceg
+spec:
+  template:
+    spec:
+      containers:
+        - name: jufieangsuduotgrquyvgjcxrptgejkzqgonsceg
+          image: ubuntu
+          command: ["echo", "Hello, world"]
+          workingDir: /home
+          volumeMounts:
+            - name: cwd
+              mountPath: /home
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 505
+        runAsGroup: 20
+      volumes:
+        - name: cwd
+          hostPath:
+            path: /Users/mwvaughn/src/TACC-Cloud/hikar8s
+  backoffLimit: 0
